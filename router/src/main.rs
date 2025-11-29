@@ -3,7 +3,12 @@ use axum::{
     http::StatusCode,
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+mod models;
+use crate::models::{
+    ChatCompletionRequest, 
+    ChatCompletionResponse, 
+    Message, Choice
+};
 
 #[tokio::main]
 async fn main(){
@@ -35,28 +40,3 @@ async fn handle_chat_completions(
     (StatusCode::OK, Json(chat_completion_response))
 }
 
-#[derive(Serialize)]
-struct Choice {
-    index: usize,
-    message: Message,
-    finish_reason: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Message {
-    role: String,
-    content: String,
-}
-
-#[derive(Deserialize)]
-struct ChatCompletionRequest {
-    model: String,
-    messages: Vec<Message>,
-    conversation_id: String,
-}
-
-#[derive(Serialize)]
-struct ChatCompletionResponse {
-    id: String,
-    choices: Vec<Choice>,
-}
