@@ -12,13 +12,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import einsum
 
-class Dropout(nn.Dropout):
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        if self.p == 0.0:
-            return input
-        else:
-            return F.dropout(input, self.p, self.training, self.inplace)
-
 class RMSLayerNorm(nn.Module):
     """
     RMS layer norm, a simplified :class:`LayerNorm` implementation
@@ -119,8 +112,6 @@ class LLaDASequentialBlock(nn.Module):
             mlp_ratio: int,
             d_model: int,
             n_heads: int, 
-            residual_dropout: float,
-            attention_dropout: float,
             rope_theta: float,
             max_sequence_length: int,
             device: torch.device,
@@ -132,11 +123,7 @@ class LLaDASequentialBlock(nn.Module):
         )
         assert d_model % n_heads == 0
 
-        self.attention_dropout = attention_dropout
         self.n_heads = n_heads
-
-        # Dropout.
-        self.dropout = Dropout(residual_dropout)
 
         # Activation function.
         self.act = SwiGLU()
@@ -203,7 +190,7 @@ class LLaDASequentialBlock(nn.Module):
             k,
             v,
             attn_mask=None,
-            dropout_p=0.0 if not self.training else self.attention_dropout,
+            dropout_p=0.0,
             is_causal=False,
         )
 
@@ -223,7 +210,7 @@ class LLaDASequentialBlock(nn.Module):
 
         # Add attention scores.
         # shape: (B, T, C)
-        x = x + self.dropout(att)
+        x = x + att
 
         # Add feed-forward projection.
         # shape: (batch_size, seq_len, d_model)
@@ -233,7 +220,6 @@ class LLaDASequentialBlock(nn.Module):
 
         x = self.act(x)
         x = self.ff_out(x)
-        x = self.dropout(x)
         x = og_x + x
 
         return x
@@ -244,12 +230,9 @@ class LLaDAModel(nn.Module):
             mlp_ratio: int,
             d_model: int,
             n_heads: int, 
-            residual_dropout: float,
-            attention_dropout: float,
             rope_theta: float,
             max_sequence_length: int,
             vocab_size: int,
-            embedding_dropout: float,
             n_layers: int,
             device: torch.device,
         ):
@@ -259,7 +242,6 @@ class LLaDAModel(nn.Module):
                 wte=nn.Embedding(
                     vocab_size, d_model, device=device
                 ),
-                emb_drop=Dropout(embedding_dropout),
                 ln_f=RMSLayerNorm(d_model=d_model, device=device),
             )
         )
@@ -270,8 +252,6 @@ class LLaDAModel(nn.Module):
                 mlp_ratio=mlp_ratio,
                 d_model=d_model,
                 n_heads=n_heads, 
-                residual_dropout=residual_dropout,
-                attention_dropout=attention_dropout,
                 rope_theta=rope_theta,
                 max_sequence_length=max_sequence_length,
                 device=device,
@@ -310,10 +290,6 @@ class LLaDAModel(nn.Module):
         # Get embeddings of input.
         # shape: (batch_size, seq_len, d_model)
         x = self.transformer.wte(input_ids)
-
-        # Add input + positional embeddings and apply dropout.
-        # shape: (batch_size, seq_len, d_model)
-        x = self.transformer.emb_drop(x)  # type: ignore
 
         for block_idx, block in enumerate(self.transformer.blocks):
             x = block(x)
