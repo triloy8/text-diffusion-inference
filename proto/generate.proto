@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package textdiffusion.v1;
+
+// Minimal finish reasons for text generation.
+enum FinishReason {
+  FINISH_REASON_LENGTH = 0;
+}
+
+// Simple text generation service with synchronous one-shot gen eration.
+service TextGenerationService {
+  rpc Generate(GenerateRequest) returns (GenerateResponse);
+}
+
+// Request for a single generation run.
+message GenerateRequest {
+  // Input prompt to condition the diffusion process.
+  string prompt = 1;
+
+  // Maximum number of output tokens (or characters, depending on server design).
+  // If reached, finish_reason = FINISH_REASON_LENGTH.
+  int32 max_output_tokens = 2;
+
+  // Number of diffusion or sampling iterations to run.
+  int32 num_steps = 3;
+
+  // Random seed.
+  uint64 seed = 4;
+
+  // Optional client-defined correlation ID.
+  string request_id = 5;
+}
+
+// Response for a single generation run.
+message GenerateResponse {
+  // The final generated text.
+  string output_text = 1;
+
+  // Why generation stopped.
+  FinishReason finish_reason = 2;
+
+  // Echo of request_id, if provided.
+  string request_id = 3;
+}
