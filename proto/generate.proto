@@ -7,7 +7,7 @@ enum FinishReason {
   FINISH_REASON_LENGTH = 0;
 }
 
-// Simple text generation service with synchronous one-shot gen eration.
+// Simple text generation service with synchronous one-shot generation.
 service TextGenerationService {
   rpc Generate(GenerateRequest) returns (GenerateResponse);
 }
@@ -27,8 +27,18 @@ message GenerateRequest {
   // Random seed.
   uint64 seed = 4;
 
-  // Optional client-defined correlation ID.
-  string request_id = 5;
+  // Mask token id.
+  uint32 mask_id = 5;
+
+  // Block length.
+  int32 block_length = 6;
+
+  // Sampling temperature / noise scale.
+  // For masked discrete diffusion you might treat 0.0 as deterministic.
+  float temperature = 7;
+
+  // Client-defined correlation ID.
+  string request_id = 8;
 }
 
 // Response for a single generation run.
