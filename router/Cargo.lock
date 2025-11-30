@@ -657,11 +657,13 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 name = "router"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "prost",
  "serde",
  "tokio",
  "tonic",
+ "tonic-prost",
  "tonic-prost-build",
 ]
 
@@ -908,6 +910,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tonic-prost"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66bd50ad6ce1252d87ef024b3d64fe4c3cf54a86fb9ef4c631fdd0ded7aeaa67"
+dependencies = [
+ "bytes",
+ "prost",
+ "tonic",
 ]
 
 [[package]]
