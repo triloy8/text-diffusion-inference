@@ -98,7 +98,154 @@ class SwiGLU(nn.Module):
 
     @property
     def output_multiplier(self) -> float:
-        return 0.5
+        return 0.5  
+
+
+class SiLU(nn.SiLU):
+    @property
+    def output_multiplier(self) -> float:
+        return 1.0
+
+
+class LLaDALlamaBlock(nn.Module):
+    """
+    This is a transformer block where the output is computed as ``MLP(LN(x + Attention(LN(x))))``
+    (plus another skip connection). This block is similar to `LLaDASequentialBlock`
+    but some operations have slightly different implementations to imitate the
+    behavior of Llama.
+    """
+
+    def __init__(
+            self, 
+            layer_id: int, 
+            mlp_ratio: int,
+            d_model: int,
+            n_heads: int, 
+            rope_theta: float,
+            max_sequence_length: int,
+            mlp_hidden_size: int,
+            device: torch.device,
+        ):
+        super().__init__()
+        self.layer_id = layer_id
+        self.hidden_size = (
+            mlp_hidden_size  if mlp_hidden_size is not None else mlp_ratio * d_model
+        )
+        assert d_model % n_heads == 0
+
+        self.n_heads = n_heads
+
+        # Activation function.
+        self.act = SiLU()
+        assert (self.act.output_multiplier * self.hidden_size) % 1 == 0
+
+        # Attention output projection.
+        self.attn_out = nn.Linear(
+            d_model, d_model, bias=False, device=device
+        )
+
+        # Feed-forward output projection.
+        self.ff_out = nn.Linear(
+            int(self.act.output_multiplier * self.hidden_size),
+            d_model,
+            bias=False,
+            device=device,
+        )
+        self.ff_out._is_residual = True
+
+        # Rotary embeddings.
+        self.rotary_emb = RotaryEmbedding(rope_theta=rope_theta, d_model=d_model, n_heads=n_heads, max_sequence_length=max_sequence_length, device=device)
+
+        # Layer norms.
+        self.attn_norm = RMSLayerNorm(d_model=d_model, device=device)
+        self.ff_norm = RMSLayerNorm(d_model=d_model, device=device)
+        
+        # Attention input projection. Projects x -> (q, k, v)
+        q_proj_out_dim = d_model
+        k_proj_out_dim = d_model
+        v_proj_out_dim = d_model
+        self.q_proj = nn.Linear(
+            d_model, q_proj_out_dim, bias=False, device=device,
+        )
+        self.k_proj = nn.Linear(
+            d_model, k_proj_out_dim, bias=False, device=device,
+        )
+        self.v_proj = nn.Linear(
+            d_model, v_proj_out_dim, bias=False, device=device,
+        )
+        
+        # Feed-forward input projection.
+        self.ff_proj = nn.Linear(
+            d_model, self.hidden_size, bias=False, device=device
+        )
+        # new add
+        self.up_proj = nn.Linear(
+            d_model, self.hidden_size, bias=False, device=device,
+        )
+
+    def attention(
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+    ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+        B, T, C = q.size()  # batch size, sequence length, d_model
+
+        # Move head forward to be next to the batch dim.
+        # shape: (B, nh, T, hs)
+        q = q.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
+        # shape: (B, n_kv_h, T, hs)
+        k = k.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
+        # shape: (B, n_kv_h, T, hs)
+        v = v.view(B, T, self.n_heads, C // self.n_heads).transpose(1, 2)
+
+        q, k = self.rotary_emb(q, k)
+
+        # Get the attention scores.
+        # shape: (B, nh, T, hs)
+        att = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            attn_mask=None,
+            dropout_p=0.0,
+            is_causal=False,
+        )
+
+        # Re-assemble all head outputs side-by-side.
+        att = att.transpose(1, 2).contiguous().view(B, T, C)
+
+        # Apply output projection.
+        return self.attn_out(att)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+    ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+        x_normed = self.attn_norm(x)
+        q = self.q_proj(x_normed)
+        k = self.k_proj(x_normed)
+        v = self.v_proj(x_normed)
+
+        att = self.attention(q, k, v)
+
+        # Add attention scores.
+        # shape: (B, T, C)
+        x = x + att
+
+        # Add feed-forward projection.
+        # shape: (batch_size, seq_len, d_model)
+        og_x = x
+        x = self.ff_norm(x)
+        x, x_up = self.ff_proj(x), self.up_proj(x) # new add
+        
+        x = self.act(x)
+        x = x * x_up # new add
+        x = self.ff_out(x)
+        x = og_x + x
+
+        return x
+
 
 class LLaDASequentialBlock(nn.Module):
     """
@@ -114,12 +261,13 @@ class LLaDASequentialBlock(nn.Module):
             n_heads: int, 
             rope_theta: float,
             max_sequence_length: int,
+            mlp_hidden_size: int,
             device: torch.device,
         ):
         super().__init__()
         self.layer_id = layer_id
         self.hidden_size = (
-            mlp_ratio * d_model
+            mlp_hidden_size if mlp_hidden_size is not None else mlp_ratio * d_model
         )
         assert d_model % n_heads == 0
 
@@ -234,6 +382,7 @@ class LLaDAModel(nn.Module):
             max_sequence_length: int,
             vocab_size: int,
             n_layers: int,
+            mlp_hidden_size: int,
             device: torch.device,
         ):
         super().__init__()
@@ -247,13 +396,14 @@ class LLaDAModel(nn.Module):
         )
 
         blocks = [
-            LLaDASequentialBlock(
+            LLaDALlamaBlock(
                 layer_id=i, 
                 mlp_ratio=mlp_ratio,
                 d_model=d_model,
                 n_heads=n_heads, 
                 rope_theta=rope_theta,
                 max_sequence_length=max_sequence_length,
+                mlp_hidden_size=mlp_hidden_size,
                 device=device,
             ) 
             for i in range(n_layers)

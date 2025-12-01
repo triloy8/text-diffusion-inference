@@ -1,0 +1,18 @@
+python3 generate_llada.py \
+  --mlp_ratio 4 \
+  --d_model 4096 \
+  --n_heads 32 \
+  --rope_theta 10000.0 \
+  --max_sequence_length 1024 \
+  --vocab_size 126464 \
+  --n_layers 32 \
+  --device "cuda" \
+  --ckpt_path model.safetensors \
+  --vocab_path ./gpt2_vocab.json \
+  --merges_path ./gpt2_merges.txt \
+  --prompt "Oh wow, it's Judy!" \
+  --mask_id 126336 \
+  --steps 256 \
+  --gen_length 256 \
+  --block_length 128 \
+  --temperature 0.0
