@@ -8,11 +8,12 @@ python3 generate_llada.py \
   --n_layers 32 \
   --device "cuda" \
   --ckpt_path model.safetensors \
-  --vocab_path ./gpt2_vocab.json \
-  --merges_path ./gpt2_merges.txt \
+  --vocab_path ./vocab.json \
+  --merges_path ./merges.txt \
+  --special_tokens ./special_tokens.json \
   --prompt "Oh wow, it's Judy!" \
   --mask_id 126336 \
-  --steps 256 \
-  --gen_length 256 \
-  --block_length 128 \
+  --steps 128 \
+  --gen_length 128 \
+  --block_length 32 \
   --temperature 0.0

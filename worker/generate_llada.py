@@ -1,6 +1,6 @@
 # adapted from https://github.com/ML-GSAI/LLaDA/blob/main/generate.py
-# from diffusionlm.model.tokenizer import Tokenizer
-# from diffusionlm.model.modeling_llada import LLaDAModel
+
+from tokenizer import Tokenizer
 from modelling_llada import LLaDAModel
 
 import torch
@@ -30,9 +30,9 @@ def get_args():
 
     # ===== MODEL FILES =====
     parser.add_argument("--ckpt_path", type=str, default="./runs/2025-08-10_23-02-31_isgighbq/3000.ckpt", help="Path to model checkpoint")
-    parser.add_argument("--vocab_path", type=str, default="./data/gpt2_vocab.json", help="Path to GPT-2 vocabulary JSON")
-    parser.add_argument("--merges_path", type=str, default="./data/gpt2_merges.txt", help="Path to GPT-2 merges file")
-    parser.add_argument("--special_tokens", type=str, nargs="+", default=["<|endoftext|>"], help="List of special tokens")
+    parser.add_argument("--vocab_path", type=str, default="./data/gpt2_vocab.json", help="Path to vocabulary JSON")
+    parser.add_argument("--merges_path", type=str, default="./data/gpt2_merges.txt", help="Path to merges file")
+    parser.add_argument("--special_tokens", type=str, default="./data/gpt2_special_tokens.json", help="Path to special tokens JSON")
 
     # ===== GENERATION =====
     parser.add_argument("--prompt", type=str, default="Oh wow, it's Judy!", help="Prompt text for generation")
@@ -99,54 +99,53 @@ def generate_llada(args):
     clean_state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
     model.load_state_dict(clean_state_dict)
 
-    # tokenizer = Tokenizer.from_files(vocab_filepath=args.vocab_path, merges_filepath=args.merges_path, special_tokens=args.special_tokens)
+    tokenizer = Tokenizer.from_files(vocab_filepath=args.vocab_path, merges_filepath=args.merges_path, special_tokens=args.special_tokens)
+    
+    input_ids = tokenizer.encode(args.prompt)
+    input_ids = torch.tensor(input_ids).unsqueeze(0).to(torch.device(args.device))
 
-    # input_ids = tokenizer.encode(args.prompt)
-    # input_ids = torch.tensor(input_ids).unsqueeze(0).to(torch.device(args.device))
+    x = torch.full((1, input_ids.shape[1] + args.gen_length), args.mask_id, dtype=torch.long).to(model.device)
+    x[:, :input_ids.shape[1]] = input_ids.clone()
 
-    # x = torch.full((1, input_ids.shape[1] + args.gen_length), args.mask_id, dtype=torch.long).to(model.device)
-    # x[:, :input_ids.shape[1]] = input_ids.clone()
+    assert args.gen_length % args.block_length == 0
+    num_blocks = args.gen_length // args.block_length
 
-    # assert args.gen_length % args.block_length == 0
-    # num_blocks = args.gen_length // args.block_length
+    assert args.steps % num_blocks == 0
+    steps = args.steps // num_blocks
 
-    # assert args.steps % num_blocks == 0
-    # steps = args.steps // num_blocks
+    for num_block in tqdm(range(num_blocks), desc="Blocks", unit="block", position=0):
+        block_mask_index = (x[:, input_ids.shape[1] + num_block * args.block_length: input_ids.shape[1] + (num_block + 1) * args.block_length:] == args.mask_id)
+        num_transfer_tokens = get_num_transfer_tokens(block_mask_index, steps)
 
-    # for num_block in tqdm(range(num_blocks), desc="Blocks", unit="block", position=0):
-    #     block_mask_index = (x[:, input_ids.shape[1] + num_block * args.block_length: input_ids.shape[1] + (num_block + 1) * args.block_length:] == args.mask_id)
-    #     num_transfer_tokens = get_num_transfer_tokens(block_mask_index, steps)
+        for i in tqdm(range(steps), desc="Steps", unit="step", position=1, leave=False):
 
-    #     for i in tqdm(range(steps), desc="Steps", unit="step", position=1, leave=False):
+            mask_index = (x == args.mask_id)
+            # cfg scale = 0
+            model.eval()
+            with torch.no_grad():
+                logits = model(x)
 
-    #         mask_index = (x == args.mask_id)
-    #         # cfg scale = 0
-    #         model.eval()
-    #         with torch.no_grad():
-    #             logits = model(x)
+            # gumbel noise for added perplexity
+            logits_with_noise = add_gumbel_noise(logits, temperature=args.temperature)
+            x0 = torch.argmax(logits_with_noise, dim=-1) # b, l
 
-    #         # gumbel noise for added perplexity
-    #         logits_with_noise = add_gumbel_noise(logits, temperature=args.temperature)
-    #         x0 = torch.argmax(logits_with_noise, dim=-1) # b, l
+            # random remasking
+            x0_p = torch.rand((x0.shape[0], x0.shape[1]), device=x0.device)
 
-    #         # random remasking
-    #         x0_p = torch.rand((x0.shape[0], x0.shape[1]), device=x0.device)
+            x0_p[:, input_ids.shape[1] + (num_block + 1) * args.block_length:] = -np.inf
 
-    #         x0_p[:, input_ids.shape[1] + (num_block + 1) * args.block_length:] = -np.inf
+            x0 = torch.where(mask_index, x0, x)
+            confidence = torch.where(mask_index, x0_p, -np.inf)
 
-    #         x0 = torch.where(mask_index, x0, x)
-    #         confidence = torch.where(mask_index, x0_p, -np.inf)
+            transfer_index = torch.zeros_like(x0, dtype=torch.bool, device=x0.device)
+            for j in range(confidence.shape[0]):
+                _, select_index = torch.topk(confidence[j], k=num_transfer_tokens[j, i])
+                transfer_index[j, select_index] = True
+            x[transfer_index] = x0[transfer_index]
 
-    #         transfer_index = torch.zeros_like(x0, dtype=torch.bool, device=x0.device)
-    #         for j in range(confidence.shape[0]):
-    #             _, select_index = torch.topk(confidence[j], k=num_transfer_tokens[j, i])
-    #             transfer_index[j, select_index] = True
-    #         x[transfer_index] = x0[transfer_index]
+    output_string = tokenizer.decode(x[0].tolist())
 
-    # output_string = tokenizer.decode(x[0].tolist())
-
-    # return output_string
-    return "okayy"
+    return output_string
 
 if __name__ == "__main__":
     args = get_args()
