@@ -23,7 +23,7 @@ class TextGenerationService(textdiffusion_pb2_grpc.TextGenerationServiceServicer
         )
 
         return textdiffusion_pb2.GenerateResponse(
-            output_text="red",
+            output_text=request.prompt,
             finish_reason=textdiffusion_pb2.FinishReason.FINISH_REASON_LENGTH,
             request_id=request.request_id,
         )

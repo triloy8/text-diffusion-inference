@@ -53,16 +53,19 @@ async fn handle_chat_completions(
     Json(payload): Json<ChatCompletionRequest>
 ) -> Result<Json<ChatCompletionResponse>, StatusCode>{
     println!("Handling chat completions...");
+
+    let formatted_chat = format_chat(payload.messages).unwrap();
+
     let mut client = state.client.clone();
 
     let request = GenerateRequest {
-        prompt: "hello".to_string(),
-        max_output_tokens: 256,
-        num_steps: 256,
+        prompt: formatted_chat,
+        max_output_tokens: 128,
+        num_steps: 128,
         seed: 0,
-        mask_id: 50257,
-        block_length: 256,
-        temperature: 0.1,
+        mask_id: 126464,
+        block_length: 32,
+        temperature: 0.0,
         request_id: "rust-test-1".to_string(),
     };
 
@@ -88,3 +91,28 @@ async fn handle_chat_completions(
     Ok(Json(chat_completion_response))
 }
 
+
+// chat template taken from here -> https://huggingface.co/GSAI-ML/LLaDA-8B-Instruct/blob/main/tokenizer_config.json
+fn format_chat(messages: Vec<Message>) -> anyhow::Result<String> {
+    let mut out = String::new();
+
+    for (i, msg) in messages.iter().enumerate() {
+        if i == 0 {
+            // bos_token content from tokenizer_config: "<|startoftext|>"
+            out.push_str("<|startoftext|>");
+        }
+
+        out.push_str("<|start_header_id|>");
+        out.push_str(&msg.role);
+        out.push_str("<|end_header_id|>\n\n");
+
+        // trim like the jinja template: message['content'] | trim
+        out.push_str(msg.content.trim());
+
+        out.push_str("<|eot_id|>");
+    }
+    // Final generation prompt for assistant:
+    out.push_str("<|start_header_id|>assistant<|end_header_id|>\n\n");
+
+    Ok(out)
+}

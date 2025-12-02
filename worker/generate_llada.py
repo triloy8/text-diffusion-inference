@@ -1,5 +1,4 @@
 # adapted from https://github.com/ML-GSAI/LLaDA/blob/main/generate.py
-
 from tokenizer import Tokenizer
 from modelling_llada import LLaDAModel
 
