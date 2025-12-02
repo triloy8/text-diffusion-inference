@@ -111,6 +111,7 @@ fn format_chat(messages: Vec<Message>) -> anyhow::Result<String> {
 
         out.push_str("<|eot_id|>");
     }
+
     // Final generation prompt for assistant:
     out.push_str("<|start_header_id|>assistant<|end_header_id|>\n\n");
 

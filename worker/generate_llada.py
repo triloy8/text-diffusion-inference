@@ -1,13 +1,8 @@
 # adapted from https://github.com/ML-GSAI/LLaDA/blob/main/generate.py
-from tokenizer import Tokenizer
-from modelling_llada import LLaDAModel
-
 import torch
 import numpy as np
-import argparse
 from tqdm import tqdm
-from safetensors.torch import load_file
-from huggingface_hub import hf_hub_download
+
 
 
 def add_gumbel_noise(logits, temperature):
@@ -44,50 +39,17 @@ def get_num_transfer_tokens(mask_index, steps):
     return num_transfer_tokens
 
 def generate_llada(
-    mlp_ratio=4,
-    d_model=4096,
-    n_heads=32,
-    rope_theta=10000.0,
-    max_sequence_length=1024,
-    vocab_size=126464,
-    n_layers=32,
-    device="cuda",
-    ckpt_path="./model.safetensors",
-    vocab_path="./vocab.json",
-    merges_path="./merges.txt",
-    special_tokens="./special_tokens.json",
+    model=None,
+    tokenizer=None,
     prompt="Oh wow, it's Judy!",
     mask_id=126336,
     steps=128,
     gen_length=128,
     block_length=32,
     temperature=0.0,
-):
-    model = LLaDAModel(
-                mlp_ratio = mlp_ratio,
-                d_model = d_model,
-                n_heads = n_heads,
-                rope_theta = rope_theta,
-                max_sequence_length = max_sequence_length,
-                vocab_size = vocab_size,
-                n_layers = n_layers,
-                mlp_hidden_size = 12288,
-                device = device,
-            )
-
-    filepath = hf_hub_download(
-        repo_id="trixyL/LLaDA-8B-Instruct-merged",
-        repo_type="model",
-        filename=ckpt_path
-    )
-    state_dict = load_file(filepath)
-    clean_state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
-    model.load_state_dict(clean_state_dict)
-
-    tokenizer = Tokenizer.from_files(vocab_filepath=vocab_path, merges_filepath=merges_path, special_tokens=special_tokens)
-    
+):    
     input_ids = tokenizer.encode(prompt)
-    input_ids = torch.tensor(input_ids).unsqueeze(0).to(torch.device(device))
+    input_ids = torch.tensor(input_ids).unsqueeze(0).to(torch.device(model.device))
 
     x = torch.full((1, input_ids.shape[1] + gen_length), mask_id, dtype=torch.long).to(model.device)
     x[:, :input_ids.shape[1]] = input_ids.clone()
