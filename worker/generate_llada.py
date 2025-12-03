@@ -4,7 +4,6 @@ import numpy as np
 from tqdm import tqdm
 
 
-
 def add_gumbel_noise(logits, temperature):
     '''
     The Gumbel max is a method for sampling categorical distributions.
@@ -47,7 +46,7 @@ def generate_llada(
     gen_length=128,
     block_length=32,
     temperature=0.0,
-):    
+):
     input_ids = tokenizer.encode(prompt)
     input_ids = torch.tensor(input_ids).unsqueeze(0).to(torch.device(model.device))
 

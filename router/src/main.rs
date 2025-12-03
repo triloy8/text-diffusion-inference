@@ -87,7 +87,7 @@ async fn handle_chat_completions(
         id: "chatcmpl-123".to_string(),
         choices: vec![choice],
     };
-    
+
     Ok(Json(chat_completion_response))
 }
 
@@ -106,13 +106,13 @@ fn format_chat(messages: Vec<Message>) -> anyhow::Result<String> {
         out.push_str(&msg.role);
         out.push_str("<|end_header_id|>\n\n");
 
-        // trim like the jinja template: message['content'] | trim
+        // trim like the template: message['content'] | trim
         out.push_str(msg.content.trim());
 
         out.push_str("<|eot_id|>");
     }
 
-    // Final generation prompt for assistant:
+    // final generation prompt for assistant:
     out.push_str("<|start_header_id|>assistant<|end_header_id|>\n\n");
 
     Ok(out)

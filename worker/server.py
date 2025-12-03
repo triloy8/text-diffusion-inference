@@ -21,19 +21,6 @@ class TextGenerationService(textdiffusion_pb2_grpc.TextGenerationServiceServicer
         self.device = device
 
     def Generate(self, request, context):
-        print(
-            "GenerateRequest(\n"
-            f"  prompt={request.prompt!r},\n"
-            f"  max_output_tokens={request.max_output_tokens},\n"
-            f"  num_steps={request.num_steps},\n"
-            f"  seed={request.seed},\n"
-            f"  mask_id={request.mask_id},\n"
-            f"  block_length={request.block_length},\n"
-            f"  temperature={request.temperature},\n"
-            f"  request_id={request.request_id!r}\n"
-            ")"
-        )
-
         output_text = generate_llada(model=self.model,
                                      tokenizer=self.tokenizer,
                                      prompt=request.prompt,
