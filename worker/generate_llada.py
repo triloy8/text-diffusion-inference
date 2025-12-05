@@ -48,6 +48,7 @@ def generate_llada(
     temperature=0.0,
 ):
     input_ids = tokenizer.encode(prompt)
+    print(input_ids)
     input_ids = torch.tensor(input_ids).unsqueeze(0).to(torch.device(model.device))
 
     x = torch.full((1, input_ids.shape[1] + gen_length), mask_id, dtype=torch.long).to(model.device)
