@@ -75,7 +75,6 @@ async fn handle_chat_completions(
         .into_inner();
 
     let cleaned_output = clean_assistant_response(&response.output_text);
-    println!("{}", cleaned_output);
 
     let return_message = Message {
         role: "assistant".to_string(),
