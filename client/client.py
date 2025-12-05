@@ -13,7 +13,7 @@ def main():
         ],
     }
 
-    resp = requests.post(ROUTER_URL, json=payload, timeout=20)
+    resp = requests.post(ROUTER_URL, json=payload, timeout=60)
     resp.raise_for_status()
     data = resp.json()
 

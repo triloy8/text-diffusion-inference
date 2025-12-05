@@ -439,8 +439,6 @@ class LLaDAModel(nn.Module):
 
         # Get embeddings of input.
         # shape: (batch_size, seq_len, d_model)
-        print(self.transformer.wte)
-        print(input_ids)
         x = self.transformer.wte(input_ids)
 
         for block_idx, block in enumerate(self.transformer.blocks):

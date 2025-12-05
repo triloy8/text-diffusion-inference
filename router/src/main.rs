@@ -63,7 +63,7 @@ async fn handle_chat_completions(
         max_output_tokens: 128,
         num_steps: 128,
         seed: 0,
-        mask_id: 126464,
+        mask_id: 126336,
         block_length: 32,
         temperature: 0.0,
         request_id: "rust-test-1".to_string(),
