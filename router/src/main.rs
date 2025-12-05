@@ -74,11 +74,12 @@ async fn handle_chat_completions(
         .map_err(|_| StatusCode::BAD_GATEWAY)?
         .into_inner();
 
-    println!("{}", response.output_text);
+    let cleaned_output = clean_assistant_response(&response.output_text);
+    println!("{}", cleaned_output);
 
     let return_message = Message {
         role: "assistant".to_string(),
-        content: response.output_text,
+        content: cleaned_output,
     };
     let choice = Choice {
         index: 0,
@@ -118,4 +119,21 @@ fn format_chat(messages: Vec<Message>) -> anyhow::Result<String> {
     out.push_str("<|start_header_id|>assistant<|end_header_id|>\n\n");
 
     Ok(out)
+}
+
+fn clean_assistant_response(raw: &str) -> String {
+    const ASSISTANT_PREFIX: &str = "<|start_header_id|>assistant<|end_header_id|>";
+    const EOT: &str = "<|eot_id|>";
+
+    let mut text = raw.trim();
+
+    if let Some(idx) = text.rfind(ASSISTANT_PREFIX) {
+        text = &text[idx + ASSISTANT_PREFIX.len()..];
+    }
+
+    while let Some(rest) = text.strip_suffix(EOT) {
+        text = rest.trim_end();
+    }
+
+    text.to_string()
 }
