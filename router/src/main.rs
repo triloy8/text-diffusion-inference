@@ -74,6 +74,8 @@ async fn handle_chat_completions(
         .map_err(|_| StatusCode::BAD_GATEWAY)?
         .into_inner();
 
+    println!("{}", response.output_text);
+
     let return_message = Message {
         role: "assistant".to_string(),
         content: response.output_text,

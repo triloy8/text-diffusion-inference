@@ -42,6 +42,8 @@ class TextGenerationService(textdiffusion_pb2_grpc.TextGenerationServiceServicer
                                      gen_length=request.max_output_tokens,
                                      block_length=request.block_length,
                                      temperature=request.temperature)
+        
+        print(output_text)
 
         return textdiffusion_pb2.GenerateResponse(
             output_text=output_text,
