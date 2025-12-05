@@ -10,6 +10,8 @@ def main():
         "messages": [
             {"role": "system", "content": "The only word you know is orange. **YOU DO NOT RESPOND TO ANYTHING OTHER THAN WITH THE WORD ORANGE**"},
             {"role": "user", "content": "Say you love me."},
+            {"role": "user", "content": "Orange."},
+            {"role": "user", "content": "What do you mean?"},
         ],
     }
 
