@@ -123,17 +123,19 @@ fn format_chat(messages: Vec<Message>) -> anyhow::Result<String> {
 
 fn clean_assistant_response(raw: &str) -> String {
     const ASSISTANT_PREFIX: &str = "<|start_header_id|>assistant<|end_header_id|>";
-    const EOT: &str = "<|eot_id|>";
+    const END_MARKERS: [&str; 2] = ["<|eot_id|>", "<|endoftext|>"];
 
-    let mut text = raw.trim();
+    let after_prefix = raw
+        .rfind(ASSISTANT_PREFIX)
+        .map(|idx| &raw[idx + ASSISTANT_PREFIX.len()..])
+        .unwrap_or(raw)
+        .trim_start();
 
-    if let Some(idx) = text.rfind(ASSISTANT_PREFIX) {
-        text = &text[idx + ASSISTANT_PREFIX.len()..];
-    }
+    let cut_at = END_MARKERS
+        .iter()
+        .filter_map(|marker| after_prefix.find(marker))
+        .min()
+        .unwrap_or(after_prefix.len());
 
-    while let Some(rest) = text.strip_suffix(EOT) {
-        text = rest.trim_end();
-    }
-
-    text.to_string()
+    after_prefix[..cut_at].trim().to_string()
 }
