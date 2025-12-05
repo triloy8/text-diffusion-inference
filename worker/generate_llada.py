@@ -47,6 +47,7 @@ def generate_llada(
     block_length=32,
     temperature=0.0,
 ):
+    prompt_len = input_ids.shape[-1]          
     input_ids = tokenizer.encode(prompt)
     input_ids = torch.tensor(input_ids).unsqueeze(0).to(torch.device(model.device))
 
@@ -89,6 +90,6 @@ def generate_llada(
                 transfer_index[j, select_index] = True
             x[transfer_index] = x0[transfer_index]
 
-    output_string = tokenizer.decode(x[0][input_ids.shape(0):].tolist())
+    output_string = tokenizer.decode(x[0, prompt_len:].tolist())
 
     return output_string
