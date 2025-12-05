@@ -89,6 +89,6 @@ def generate_llada(
                 transfer_index[j, select_index] = True
             x[transfer_index] = x0[transfer_index]
 
-    output_string = tokenizer.decode(x[0].tolist())
+    output_string = tokenizer.decode(x[0][input_ids.shape(0):].tolist())
 
     return output_string
