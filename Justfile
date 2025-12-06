@@ -49,11 +49,30 @@ run-router:
     @echo "Running Rust router..."
     cd router && cargo run
 
-fmt:
+router-fmt:
     cd router && cargo fmt
 
-lint:
+router-lint:
     cd router && cargo clippy
+
+
+# ==========================================
+# Rust Launcher
+# ==========================================
+
+build-launcher:
+    @echo "Building Rust launcher..."
+    cd launcher && cargo build
+
+run-launcher:
+    @echo "Running Rust launcher..."
+    cd launcher && cargo run
+
+launcher-fmt:
+    cd launcher && cargo fmt
+
+launcher-lint:
+    cd launcher && cargo clippy
 
 
 # ===========================
@@ -61,7 +80,7 @@ lint:
 # ===========================
 
 # One-time setup: generate proto + install Python deps + build router
-setup: install-worker build-router proto
+setup: install-worker build-router build-launcher proto
     @echo "Setup complete."
 
 
@@ -72,6 +91,7 @@ setup: install-worker build-router proto
 clean:
     @echo "Cleaning Rust + Python artifacts..."
     cd router && cargo clean
+    cd launcher && cargo clean
     rm -rf worker/.venv
     rm -rf worker/textdiffusion
     @echo "Clean complete."
