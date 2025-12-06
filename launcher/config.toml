@@ -1,17 +1,23 @@
-# device="cuda"
-# mlp_ratio=4
-# d_model=4096
-# n_heads=32
-# rope_theta=10000.0
-# max_sequence_length=1024
-# vocab_size=126464
-# n_layers=32
-# ckpt_path="./model.safetensors"
-# vocab_path="./vocab.json"
-# merges_path="./merges.txt"
-# special_tokens="./special_tokens.json"
-# mlp_hidden_size = 12288
-# repo_id="trixyL/LLaDA-8B-Instruct-merged"
-# router ip/port
-# launcher ip/port
-# worker ip/port
+[model]
+device = "cuda"
+mlp_ratio = 4
+d_model = 4096
+n_heads = 32
+rope_theta = 10000.0
+max_sequence_length = 1024
+vocab_size = 126464
+n_layers = 32
+mlp_hidden_size = 12288
+ckpt_path = "./model.safetensors"
+vocab_path = "./vocab.json"
+merges_path = "./merges.txt"
+special_tokens = "./special_tokens.json"
+repo_id = "trixyL/LLaDA-8B-Instruct-merged"
+
+[router]
+host = "localhost"
+port = 3001
+
+[worker]
+host = "localhost"
+port = 50057
