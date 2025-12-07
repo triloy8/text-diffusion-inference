@@ -19,5 +19,4 @@ host = "localhost"
 port = 3001
 
 [worker]
-host = "localhost"
-port = 50057
+sock = "/tmp/worker.sock"
