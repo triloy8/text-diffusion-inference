@@ -21,4 +21,4 @@ binary = "../router/target/debug/router"
 
 [worker]
 sock = "/tmp/worker.sock"
-command = "uv run python ../worker/server.py"
+command = "uv run ../worker/server.py"
