@@ -55,6 +55,31 @@ struct WorkerConfig {
     sock: String,
 }
 
+struct ChildGuard(Option<Child>);
+
+impl ChildGuard {
+    fn new(child: Child) -> Self {
+        Self(Some(child))
+    }
+
+    fn child_mut(&mut self) -> &mut Child {
+        self.0.as_mut().expect("child already taken")
+    }
+
+    fn into_inner(mut self) -> Child {
+        self.0.take().expect("child already taken")
+    }
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.0.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 fn load_config(path: &Path) -> anyhow::Result<LaunchConfig> {
     let bytes = fs::read(path)?;
     Ok(toml::from_slice(&bytes)?)
@@ -66,7 +91,7 @@ fn main() -> anyhow::Result<()> {
     run(cfg)
 }
 
-fn spawn_worker(worker: &WorkerConfig, model: &ModelConfig) -> anyhow::Result<Child> {
+fn spawn_worker(worker: &WorkerConfig, model: &ModelConfig) -> anyhow::Result<ChildGuard> {
     let ckpt_path = path_to_string(&model.ckpt_path)?;
     let vocab_path = path_to_string(&model.vocab_path)?;
     let merges_path = path_to_string(&model.merges_path)?;
@@ -75,7 +100,7 @@ fn spawn_worker(worker: &WorkerConfig, model: &ModelConfig) -> anyhow::Result<Ch
     let mut command = Command::new(&worker.command);
     command.args(&worker.args);
 
-    command
+    let child = command
         .arg("--uds-path").arg(&worker.sock)
         .arg("--device").arg(&model.device)
         .arg("--mlp-ratio").arg(model.mlp_ratio.to_string())
@@ -92,16 +117,18 @@ fn spawn_worker(worker: &WorkerConfig, model: &ModelConfig) -> anyhow::Result<Ch
         .arg("--special-tokens").arg(special_tokens)
         .arg("--repo-id").arg(&model.repo_id)
         .spawn()
-        .with_context(|| format!("failed to spawn worker command `{}`", worker.command))
+        .with_context(|| format!("failed to spawn worker command `{}`", worker.command))?;
+
+    Ok(ChildGuard::new(child))
 }
 
-fn wait_for_worker_ready(worker: &mut Child, uds_path: &str) -> anyhow::Result<()> {
+fn wait_for_worker_ready(worker: &mut ChildGuard, uds_path: &str) -> anyhow::Result<()> {
     let uds = Path::new(uds_path);
     let start = Instant::now();
 
     loop {
         // exit on worker died before ready
-        if let Some(status) = worker.try_wait()? {
+        if let Some(status) = worker.child_mut().try_wait()? {
             anyhow::bail!("worker exited early with status: {}", status);
         }
 
@@ -120,29 +147,31 @@ fn wait_for_worker_ready(worker: &mut Child, uds_path: &str) -> anyhow::Result<(
     }
 }
 
-fn spawn_router(binary: &str, uds_path: &str, host: &str, port: &u16) -> std::io::Result<Child> {
-    Command::new(binary)
+fn spawn_router(binary: &str, uds_path: &str, host: &str, port: &u16) -> std::io::Result<ChildGuard> {
+    let child = Command::new(binary)
         .arg("--host").arg(host)
         .arg("--port").arg(port.to_string())
         .arg("--uds-path").arg(uds_path)
-        .spawn()
+        .spawn()?;
+
+    Ok(ChildGuard::new(child))
 }
 
-fn supervise(mut worker: Child, mut router: Child) -> anyhow::Result<()> {
+fn supervise(mut worker: ChildGuard, mut router: ChildGuard) -> anyhow::Result<()> {
     loop {
         // loop check worker
-        if let Some(status) = worker.try_wait()? {
+        if let Some(status) = worker.child_mut().try_wait()? {
             eprintln!("worker exited with status {status}, shutting down router...");
-            let _ = router.kill();
-            let _ = router.wait();
+            let _ = router.child_mut().kill();
+            let _ = router.child_mut().wait();
             anyhow::bail!("worker exited");
         }
 
         // loop check router
-        if let Some(status) = router.try_wait()? {
+        if let Some(status) = router.child_mut().try_wait()? {
             eprintln!("router exited with status {status}, shutting down worker...");
-            let _ = worker.kill();
-            let _ = worker.wait();
+            let _ = worker.child_mut().kill();
+            let _ = worker.child_mut().wait();
             anyhow::bail!("router exited");
         }
 
