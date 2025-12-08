@@ -51,6 +51,7 @@ struct RouterConfig {
 #[derive(Debug, Deserialize)]
 struct WorkerConfig {
     command: String,
+    args: Vec<String>,
     sock: String,
 }
 
@@ -65,14 +66,17 @@ fn main() -> anyhow::Result<()> {
     run(cfg)
 }
 
-fn spawn_worker(command: &str, uds_path: &str, model: &ModelConfig) -> anyhow::Result<Child> {
+fn spawn_worker(worker: &WorkerConfig, model: &ModelConfig) -> anyhow::Result<Child> {
     let ckpt_path = path_to_string(&model.ckpt_path)?;
     let vocab_path = path_to_string(&model.vocab_path)?;
     let merges_path = path_to_string(&model.merges_path)?;
     let special_tokens = path_to_string(&model.special_tokens)?;
 
-    Command::new(command)
-        .arg("--uds-path").arg(uds_path)
+    let mut command = Command::new(&worker.command);
+    command.args(&worker.args);
+
+    command
+        .arg("--uds-path").arg(&worker.sock)
         .arg("--device").arg(&model.device)
         .arg("--mlp-ratio").arg(model.mlp_ratio.to_string())
         .arg("--d-model").arg(model.d_model.to_string())
@@ -88,7 +92,7 @@ fn spawn_worker(command: &str, uds_path: &str, model: &ModelConfig) -> anyhow::R
         .arg("--special-tokens").arg(special_tokens)
         .arg("--repo-id").arg(&model.repo_id)
         .spawn()
-        .with_context(|| format!("failed to spawn worker command `{command}`"))
+        .with_context(|| format!("failed to spawn worker command `{}`", worker.command))
 }
 
 fn wait_for_worker_ready(worker: &mut Child, uds_path: &str) -> anyhow::Result<()> {
@@ -147,14 +151,14 @@ fn supervise(mut worker: Child, mut router: Child) -> anyhow::Result<()> {
 }
 
 fn run(config: LaunchConfig) -> anyhow::Result<()> {
-    let worker_command = &config.worker.command;
+    let worker_cfg = &config.worker;
     let router_binary = &config.router.binary;
     let uds_path = &config.worker.sock;
     let host = &config.router.host;
     let port = &config.router.port;
 
     println!("starting worker…");
-    let mut worker = spawn_worker(worker_command, uds_path, &config.model)?;
+    let mut worker = spawn_worker(worker_cfg, &config.model)?;
 
     println!("waiting for worker ready…");
     wait_for_worker_ready(&mut worker, uds_path)?;
