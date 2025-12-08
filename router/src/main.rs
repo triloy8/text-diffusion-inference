@@ -1,9 +1,15 @@
 use axum::{
     extract::State,
-    routing::{post},
-    http::StatusCode,
+    http::{StatusCode, Uri},
+    routing::post,
     Json, Router,
 };
+use clap::Parser;
+use std::path::{Path, PathBuf};
+use tokio::net::UnixStream;
+use hyper_util::rt::TokioIo;
+use tonic::transport::{Channel, Endpoint};
+use tower::service_fn;
 mod models;
 use crate::models::{
     ChatCompletionRequest, 
@@ -11,7 +17,6 @@ use crate::models::{
     Message, Choice
 };
 
-use tonic::transport::Channel;
 pub mod textdiffusion {
     pub mod v1 {
         tonic::include_proto!("textdiffusion.v1");
@@ -28,11 +33,22 @@ struct AppState {
     client: TextGenerationServiceClient<Channel>,
 }
 
+#[derive(Parser, Debug)]
+#[command(name = "router", about = "Text Diffusion router")]
+struct Cli {
+    #[arg(long, default_value = "localhost")]
+    host: String,
+    #[arg(long, default_value_t = 3001)]
+    port: u16,
+    #[arg(long = "uds-path", value_name = "SOCKET")]
+    uds_path: PathBuf,
+}
+
 #[tokio::main]
 async fn main()  -> anyhow::Result<()> {
-    let channel: Channel = Channel::from_static("http://127.0.0.1:50057")
-        .connect()
-        .await?;
+    let cli = Cli::parse();
+
+    let channel = connect_worker(&cli.uds_path).await?;
 
     let client = TextGenerationServiceClient::new(channel);
 
@@ -42,17 +58,33 @@ async fn main()  -> anyhow::Result<()> {
         .route("/v1/chat/completions", post(handle_chat_completions))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("localhost:3001").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let addr = format!("{}:{}", cli.host, cli.port);
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+async fn connect_worker(uds_path: &Path) -> anyhow::Result<Channel> {
+    let uds = uds_path.to_path_buf();
+    let endpoint = Endpoint::try_from("http://[::]:50057")?;
+    let channel = endpoint
+        .connect_with_connector(service_fn(move |_: Uri| {
+            let uds = uds.clone();
+            async move {
+                let stream = UnixStream::connect(uds).await?;
+                Ok::<_, std::io::Error>(TokioIo::new(stream))
+            }
+        }))
+        .await?;
+    Ok(channel)
 }
 
 async fn handle_chat_completions(
     State(state): State<AppState>,
     Json(payload): Json<ChatCompletionRequest>
 ) -> Result<Json<ChatCompletionResponse>, StatusCode>{
-    println!("Handling chat completions...");
+    println!("handling chat completions...");
 
     let formatted_chat = format_chat(payload.messages).unwrap();
 

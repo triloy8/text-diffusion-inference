@@ -1,17 +1,43 @@
-from safetensors.torch import load_file
-from huggingface_hub import hf_hub_download
-
-from tokenizer import Tokenizer
-from modelling_llada import LLaDAModel
-from generate_llada import generate_llada
-
+import argparse
 import logging
 from concurrent import futures
+from dataclasses import dataclass
+from pathlib import Path
 
 import grpc
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
+
+from generate_llada import generate_llada
+from modelling_llada import LLaDAModel
+from tokenizer import Tokenizer
 
 from textdiffusion.v1 import textdiffusion_pb2
 from textdiffusion.v1 import textdiffusion_pb2_grpc
+
+
+@dataclass
+class ModelConfig:
+    device: str
+    mlp_ratio: int
+    d_model: int
+    n_heads: int
+    rope_theta: float
+    max_sequence_length: int
+    vocab_size: int
+    n_layers: int
+    mlp_hidden_size: int
+    ckpt_path: Path
+    vocab_path: Path
+    merges_path: Path
+    special_tokens: Path
+    repo_id: str
+
+
+@dataclass
+class WorkerConfig:
+    uds_path: Path
+    model: ModelConfig
 
 
 class TextGenerationService(textdiffusion_pb2_grpc.TextGenerationServiceServicer):
@@ -49,68 +75,106 @@ class TextGenerationService(textdiffusion_pb2_grpc.TextGenerationServiceServicer
             request_id=request.request_id,
         )
 
-def serve(host: str = "localhost", port: int = 50057) -> None:
-    device="cuda"
-    mlp_ratio=4
-    d_model=4096
-    n_heads=32
-    rope_theta=10000.0
-    max_sequence_length=1024
-    vocab_size=126464
-    n_layers=32
-    ckpt_path="./model.safetensors"
-    vocab_path="./vocab.json"
-    merges_path="./merges.txt"
-    special_tokens="./special_tokens.json"
-    
+def serve(config: WorkerConfig) -> None:
+    model_cfg = config.model
+
     model = LLaDAModel(
-                mlp_ratio = mlp_ratio,
-                d_model = d_model,
-                n_heads = n_heads,
-                rope_theta = rope_theta,
-                max_sequence_length = max_sequence_length,
-                vocab_size = vocab_size,
-                n_layers = n_layers,
-                mlp_hidden_size = 12288,
-                device = device,
+                mlp_ratio = model_cfg.mlp_ratio,
+                d_model = model_cfg.d_model,
+                n_heads = model_cfg.n_heads,
+                rope_theta = model_cfg.rope_theta,
+                max_sequence_length = model_cfg.max_sequence_length,
+                vocab_size = model_cfg.vocab_size,
+                n_layers = model_cfg.n_layers,
+                mlp_hidden_size = model_cfg.mlp_hidden_size,
+                device = model_cfg.device,
             )
 
     model_filepath = hf_hub_download(
-        repo_id="trixyL/LLaDA-8B-Instruct-merged",
+        repo_id=model_cfg.repo_id,
         repo_type="model",
-        filename=ckpt_path
+        filename=str(model_cfg.ckpt_path)
     )
     state_dict = load_file(model_filepath)
     clean_state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
     model.load_state_dict(clean_state_dict)
 
     special_tokens_filepath = hf_hub_download(
-        repo_id="trixyL/LLaDA-8B-Instruct-merged",
+        repo_id=model_cfg.repo_id,
         repo_type="model",
-        filename=special_tokens
+        filename=str(model_cfg.special_tokens)
     )
     vocab_filepath = hf_hub_download(
-        repo_id="trixyL/LLaDA-8B-Instruct-merged",
+        repo_id=model_cfg.repo_id,
         repo_type="model",
-        filename=vocab_path
+        filename=str(model_cfg.vocab_path)
     )
     merges_filepath = hf_hub_download(
-        repo_id="trixyL/LLaDA-8B-Instruct-merged",
+        repo_id=model_cfg.repo_id,
         repo_type="model",
-        filename=merges_path
+        filename=str(model_cfg.merges_path)
     )
-    tokenizer = Tokenizer.from_files(vocab_filepath=vocab_filepath, 
-                                     merges_filepath=merges_filepath, 
-                                     special_tokens=special_tokens_filepath)
+    tokenizer = Tokenizer.from_files(
+        vocab_filepath=vocab_filepath,
+        merges_filepath=merges_filepath, 
+        special_tokens=special_tokens_filepath
+    )
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
     textdiffusion_pb2_grpc.add_TextGenerationServiceServicer_to_server(
-        TextGenerationService(model, tokenizer, device), server
+        TextGenerationService(model, tokenizer, model_cfg.device), server
     )
-    server.add_insecure_port(f"{host}:{port}")
+    server.add_insecure_port(f"unix://{config.uds_path}")
     server.start()
-    logging.info("TextGenerationService listening on %s:%d", host, port)
+    logging.info(
+        "TextGenerationService listening on uds socket %s",
+        config.uds_path,
+    )
     server.wait_for_termination()
+
+
+def parse_args() -> WorkerConfig:
+    parser = argparse.ArgumentParser(description="text-diffusion worker")
+    parser.add_argument("--uds-path", type=Path, required=True)
+    parser.add_argument("--device", required=True)
+    parser.add_argument("--mlp-ratio", type=int, required=True)
+    parser.add_argument("--d-model", type=int, required=True)
+    parser.add_argument("--n-heads", type=int, required=True)
+    parser.add_argument("--rope-theta", type=float, required=True)
+    parser.add_argument("--max-sequence-length", type=int, required=True)
+    parser.add_argument("--vocab-size", type=int, required=True)
+    parser.add_argument("--n-layers", type=int, required=True)
+    parser.add_argument("--mlp-hidden-size", type=int, required=True)
+    parser.add_argument("--ckpt-path", type=Path, required=True)
+    parser.add_argument("--vocab-path", type=Path, required=True)
+    parser.add_argument("--merges-path", type=Path, required=True)
+    parser.add_argument("--special-tokens", type=Path, required=True)
+    parser.add_argument("--repo-id", required=True)
+
+    args = parser.parse_args()
+    model_cfg = ModelConfig(
+        device=args.device,
+        mlp_ratio=args.mlp_ratio,
+        d_model=args.d_model,
+        n_heads=args.n_heads,
+        rope_theta=args.rope_theta,
+        max_sequence_length=args.max_sequence_length,
+        vocab_size=args.vocab_size,
+        n_layers=args.n_layers,
+        mlp_hidden_size=args.mlp_hidden_size,
+        ckpt_path=args.ckpt_path,
+        vocab_path=args.vocab_path,
+        merges_path=args.merges_path,
+        special_tokens=args.special_tokens,
+        repo_id=args.repo_id,
+    )
+
+    return WorkerConfig(
+        uds_path=args.uds_path,
+        model=model_cfg,
+    )
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    serve()
+    config = parse_args()
+    serve(config)

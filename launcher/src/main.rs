@@ -1,3 +1,4 @@
+use anyhow::{self, Context};
 use clap::Parser;
 use serde::Deserialize;
 use std::{
@@ -5,6 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use std::process::{Command, Child};
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 #[derive(Parser)]
 #[command(name = "launcher", about = "Text Diffusion Inference launcher")]
@@ -40,12 +43,14 @@ struct ModelConfig {
 
 #[derive(Debug, Deserialize)]
 struct RouterConfig {
+    binary: String,
     host: String,
     port: u16,
 }
 
 #[derive(Debug, Deserialize)]
 struct WorkerConfig {
+    command: String,
     sock: String,
 }
 
@@ -60,42 +65,102 @@ fn main() -> anyhow::Result<()> {
     run(cfg)
 }
 
-fn spawn_worker(uds_path: &str) -> std::io::Result<Child> {
-    Command::new("worker")
+fn spawn_worker(command: &str, uds_path: &str, model: &ModelConfig) -> anyhow::Result<Child> {
+    let ckpt_path = path_to_string(&model.ckpt_path)?;
+    let vocab_path = path_to_string(&model.vocab_path)?;
+    let merges_path = path_to_string(&model.merges_path)?;
+    let special_tokens = path_to_string(&model.special_tokens)?;
+
+    Command::new(command)
+        .arg("--uds-path").arg(uds_path)
+        .arg("--device").arg(&model.device)
+        .arg("--mlp-ratio").arg(model.mlp_ratio.to_string())
+        .arg("--d-model").arg(model.d_model.to_string())
+        .arg("--n-heads").arg(model.n_heads.to_string())
+        .arg("--rope-theta").arg(model.rope_theta.to_string())
+        .arg("--max-sequence-length").arg(model.max_sequence_length.to_string())
+        .arg("--vocab-size").arg(model.vocab_size.to_string())
+        .arg("--n-layers").arg(model.n_layers.to_string())
+        .arg("--mlp-hidden-size").arg(model.mlp_hidden_size.to_string())
+        .arg("--ckpt-path").arg(ckpt_path)
+        .arg("--vocab-path").arg(vocab_path)
+        .arg("--merges-path").arg(merges_path)
+        .arg("--special-tokens").arg(special_tokens)
+        .arg("--repo-id").arg(&model.repo_id)
         .spawn()
+        .with_context(|| format!("failed to spawn worker command `{command}`"))
 }
 
-/// exit on worker died before ready
-/// socket exists -> assume server is listening
-/// timeout
 fn wait_for_worker_ready(worker: &mut Child, uds_path: &str) -> anyhow::Result<()> {
-    Ok(())
+    let uds = Path::new(uds_path);
+    let start = Instant::now();
+
+    loop {
+        // exit on worker died before ready
+        if let Some(status) = worker.try_wait()? {
+            anyhow::bail!("worker exited early with status: {}", status);
+        }
+
+        // socket exists -> assume server is listening
+        if uds.exists() {
+            println!("worker ready in {:?}", start.elapsed());
+            return Ok(());
+        }
+
+        // timeout
+        if start.elapsed() > Duration::from_secs(300) {
+            anyhow::bail!("timed out waiting for worker to become ready");
+        }
+
+        sleep(Duration::from_millis(100));
+    }
 }
 
-fn spawn_router(uds_path: &str, host: &str, port: u16) -> std::io::Result<Child> {
-    Command::new("router")
+fn spawn_router(binary: &str, uds_path: &str, host: &str, port: &u16) -> std::io::Result<Child> {
+    Command::new(binary)
+        .arg("--host").arg(host)
+        .arg("--port").arg(port.to_string())
+        .arg("--uds-path").arg(uds_path)
         .spawn()
 }
 
-/// loop check worker
-/// loop check router
 fn supervise(mut worker: Child, mut router: Child) -> anyhow::Result<()> {
-    Ok(())
+    loop {
+        // loop check worker
+        if let Some(status) = worker.try_wait()? {
+            eprintln!("worker exited with status {status}, shutting down router...");
+            let _ = router.kill();
+            let _ = router.wait();
+            anyhow::bail!("worker exited");
+        }
+
+        // loop check router
+        if let Some(status) = router.try_wait()? {
+            eprintln!("router exited with status {status}, shutting down worker...");
+            let _ = worker.kill();
+            let _ = worker.wait();
+            anyhow::bail!("router exited");
+        }
+
+        sleep(Duration::from_millis(500));
+    }
 }
 
 fn run(config: LaunchConfig) -> anyhow::Result<()> {
+    let worker_command = &config.worker.command;
+    let router_binary = &config.router.binary;
     let uds_path = &config.worker.sock;
     let host = &config.router.host;
-    let port = config.router.port;
+    let port = &config.router.port;
 
     println!("starting worker…");
-    let mut worker = spawn_worker(uds_path)?;
+    let mut worker = spawn_worker(worker_command, uds_path, &config.model)?;
 
     println!("waiting for worker ready…");
     wait_for_worker_ready(&mut worker, uds_path)?;
 
     println!("starting router…");
-    let router = spawn_router(uds_path, &host, port)?;
+    let router = spawn_router(router_binary, uds_path, host, port)?;
 
     println!(
         "router listening on {}:{}, worker at sock {}",
@@ -106,4 +171,10 @@ fn run(config: LaunchConfig) -> anyhow::Result<()> {
 
     supervise(worker, router)
 
+}
+
+fn path_to_string(path: &Path) -> anyhow::Result<String> {
+    path.to_str()
+        .map(|s| s.to_owned())
+        .ok_or_else(|| anyhow::anyhow!("path contains invalid UTF-8: {}", path.display()))
 }
