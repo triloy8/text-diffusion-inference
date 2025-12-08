@@ -186,6 +186,11 @@ fn run(config: LaunchConfig) -> anyhow::Result<()> {
     let host = &config.router.host;
     let port = &config.router.port;
 
+    let uds = Path::new(uds_path);
+    if uds.exists() {
+        let _ = fs::remove_file(uds);
+    }
+
     println!("starting worker…");
     let mut worker = spawn_worker(worker_cfg, &config.model)?;
 
