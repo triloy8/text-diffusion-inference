@@ -17,8 +17,8 @@ repo_id = "trixyL/LLaDA-8B-Instruct-merged"
 [router]
 host = "localhost"
 port = 3001
-binary = "../router/target/debug/router"
+binary = "router/target/debug/router"
 
 [worker]
 sock = "/tmp/worker.sock"
-command = "uv run ../worker/server.py"
+command = "uv run --project worker/ worker/server.py"
