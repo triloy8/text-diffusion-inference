@@ -8,10 +8,10 @@ max_sequence_length = 1024
 vocab_size = 126464
 n_layers = 32
 mlp_hidden_size = 12288
-ckpt_path = "./model.safetensors"
-vocab_path = "./vocab.json"
-merges_path = "./merges.txt"
-special_tokens = "./special_tokens.json"
+ckpt_path = "model.safetensors"
+vocab_path = "vocab.json"
+merges_path = "merges.txt"
+special_tokens = "special_tokens.json"
 repo_id = "trixyL/LLaDA-8B-Instruct-merged"
 dtype = "float16"
 
