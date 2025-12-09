@@ -39,6 +39,7 @@ struct ModelConfig {
     merges_path: PathBuf,
     special_tokens: PathBuf,
     repo_id: String,
+    dtype: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,6 +117,7 @@ fn spawn_worker(worker: &WorkerConfig, model: &ModelConfig) -> anyhow::Result<Ch
         .arg("--merges-path").arg(merges_path)
         .arg("--special-tokens").arg(special_tokens)
         .arg("--repo-id").arg(&model.repo_id)
+        .arg("--dtype").arg(&model.dtype)
         .spawn()
         .with_context(|| format!("failed to spawn worker command `{}`", worker.command))?;
 

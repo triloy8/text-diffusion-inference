@@ -7,9 +7,10 @@ from pathlib import Path
 import grpc
 from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
+import torch
 
-from generate_llada import generate_llada
-from modelling_llada import LLaDAModel
+from generate import generate_llada
+from model import LLaDAModel
 from tokenizer import Tokenizer
 
 from textdiffusion.v1 import textdiffusion_pb2
@@ -32,6 +33,7 @@ class ModelConfig:
     merges_path: Path
     special_tokens: Path
     repo_id: str
+    dtype: str
 
 
 @dataclass
@@ -77,6 +79,7 @@ class TextGenerationService(textdiffusion_pb2_grpc.TextGenerationServiceServicer
 
 def serve(config: WorkerConfig) -> None:
     model_cfg = config.model
+    torch_dtype = resolve_dtype(model_cfg.dtype)
 
     model = LLaDAModel(
                 mlp_ratio = model_cfg.mlp_ratio,
@@ -98,6 +101,7 @@ def serve(config: WorkerConfig) -> None:
     state_dict = load_file(model_filepath)
     clean_state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
     model.load_state_dict(clean_state_dict)
+    model = model.to(dtype=torch_dtype)
 
     special_tokens_filepath = hf_hub_download(
         repo_id=model_cfg.repo_id,
@@ -149,6 +153,7 @@ def parse_args() -> WorkerConfig:
     parser.add_argument("--merges-path", type=Path, required=True)
     parser.add_argument("--special-tokens", type=Path, required=True)
     parser.add_argument("--repo-id", required=True)
+    parser.add_argument("--dtype", required=True)
 
     args = parser.parse_args()
     model_cfg = ModelConfig(
@@ -166,12 +171,20 @@ def parse_args() -> WorkerConfig:
         merges_path=args.merges_path,
         special_tokens=args.special_tokens,
         repo_id=args.repo_id,
+        dtype=args.dtype,
     )
 
     return WorkerConfig(
         uds_path=args.uds_path,
         model=model_cfg,
     )
+
+
+def resolve_dtype(name: str) -> torch.dtype:
+    dtype = getattr(torch, name, None)
+    if not isinstance(dtype, torch.dtype):
+        raise ValueError(f"unsupported torch dtype: {name}")
+    return dtype
 
 
 if __name__ == "__main__":
