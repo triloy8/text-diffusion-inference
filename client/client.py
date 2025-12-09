@@ -13,6 +13,12 @@ def main():
             {"role": "user", "content": "Orange."},
             {"role": "user", "content": "What do you mean?"},
         ],
+        "max_tokens": 128,
+        "num_steps": 128,
+        "seed": 0,
+        "mask_id": 126336,
+        "block_length": 32,
+        "temperature": 0.0,
     }
 
     resp = requests.post(ROUTER_URL, json=payload, timeout=60)

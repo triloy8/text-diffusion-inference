@@ -33,6 +33,13 @@ struct AppState {
     client: TextGenerationServiceClient<Channel>,
 }
 
+const DEFAULT_MAX_TOKENS: u32 = 128;
+const DEFAULT_NUM_STEPS: u32 = 128;
+const DEFAULT_SEED: u64 = 0;
+const DEFAULT_MASK_ID: u32 = 126336;
+const DEFAULT_BLOCK_LENGTH: u32 = 32;
+const DEFAULT_TEMPERATURE: f32 = 0.0;
+
 #[derive(Parser, Debug)]
 #[command(name = "router", about = "Text Diffusion router")]
 struct Cli {
@@ -82,23 +89,42 @@ async fn connect_worker(uds_path: &Path) -> anyhow::Result<Channel> {
 
 async fn handle_chat_completions(
     State(state): State<AppState>,
-    Json(payload): Json<ChatCompletionRequest>
-) -> Result<Json<ChatCompletionResponse>, StatusCode>{
+    Json(payload): Json<ChatCompletionRequest>,
+) -> Result<Json<ChatCompletionResponse>, StatusCode> {
     println!("handling chat completions...");
 
-    let formatted_chat = format_chat(payload.messages).unwrap();
+    let ChatCompletionRequest {
+        model: _,
+        messages,
+        conversation_id,
+        max_tokens,
+        num_steps,
+        seed,
+        mask_id,
+        block_length,
+        temperature,
+    } = payload;
+
+    let formatted_chat = format_chat(messages).unwrap();
 
     let mut client = state.client.clone();
 
+    let max_output_tokens = max_tokens.unwrap_or(DEFAULT_MAX_TOKENS) as i32;
+    let steps = num_steps.unwrap_or(DEFAULT_NUM_STEPS) as i32;
+    let block_len = block_length.unwrap_or(DEFAULT_BLOCK_LENGTH) as i32;
+    let seed = seed.unwrap_or(DEFAULT_SEED);
+    let mask_id = mask_id.unwrap_or(DEFAULT_MASK_ID);
+    let temperature = temperature.unwrap_or(DEFAULT_TEMPERATURE);
+
     let request = GenerateRequest {
         prompt: formatted_chat,
-        max_output_tokens: 128,
-        num_steps: 128,
-        seed: 0,
-        mask_id: 126336,
-        block_length: 32,
-        temperature: 0.0,
-        request_id: "rust-test-1".to_string(),
+        max_output_tokens,
+        num_steps: steps,
+        seed,
+        mask_id,
+        block_length: block_len,
+        temperature,
+        request_id: conversation_id,
     };
 
     let response = client.generate(request)
