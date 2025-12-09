@@ -62,6 +62,6 @@ Adjust the payload or target URL as needed.
 - Router/launcher logs stream to stdout; start each via `just` in its own terminal for quick triage.
 
 ## Roadmap
-- [] Token abstraction inside the router <-> worker protobuf contract to simplify payload exchange.
-- [] gRPC healthchecks/info/discovery so the launcher and router can reason about worker state.
-- [] Sharding experiments.
+- [ ] Token abstraction inside the router <-> worker protobuf contract to simplify payload exchange.
+- [ ] gRPC healthchecks/info/discovery so the launcher and router can reason about worker state.
+- [ ] Sharding experiments.
