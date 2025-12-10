@@ -39,16 +39,30 @@ pub struct Tokenizer{
 }
 
 impl Tokenizer {
-    pub fn from_files<P: AsRef<Path>>(vocab_filepath: P, merges_filepath: P, special_tokens: Vec<String>) ->  Result<Tokenizer> {
+    pub fn from_files<P: AsRef<Path>>(
+        vocab_filepath: P,
+        merges_filepath: P,
+        special_tokens_filepath: P,
+    ) ->  Result<Tokenizer> {
         // gpt2 unicode encoder/decoder
         let gpt2_encoder: HashMap<u8, char> = gpt2_bytes_to_unicode();
         let gpt2_decoder: HashMap<char, u8> = gpt2_encoder.iter().map(|(&id, &ch)| (ch, id)).collect();
 
-        // vocab
+        // vocab / special tokens
         let raw_gpt2_vocab = std::fs::read_to_string(vocab_filepath)?;
         let mut gpt2_vocab: HashMap<String, usize> = serde_json::from_str::<HashMap<String, usize>>(&raw_gpt2_vocab)?;
+
+        let raw_special_tokens = std::fs::read_to_string(special_tokens_filepath)?;
+        let special_tokens_map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&raw_special_tokens)?;
+        let special_tokens: Vec<String> = special_tokens_map
+            .into_iter()
+            .map(|(special_token, _)| special_token)
+            .collect();
         for special_token in &special_tokens {
-            gpt2_vocab.insert(special_token.clone(), gpt2_vocab.values().len());
+            if !gpt2_vocab.contains_key(special_token) {
+                let next_id = gpt2_vocab.len();
+                gpt2_vocab.insert(special_token.clone(), next_id);
+            }
         }
 
         let mut vocab_encoder: HashMap<String, usize> = HashMap::new();
@@ -78,11 +92,13 @@ impl Tokenizer {
             None
         } else {
             // special token regex
-            let special_tokens_pattern = special_tokens
-            .iter()
-            .map(|tok| regex::escape(tok))
-            .collect::<Vec<_>>()
-            .join("|");
+            let mut sorted_special_tokens = special_tokens.clone();
+            sorted_special_tokens.sort_by(|a, b| b.len().cmp(&a.len()));
+            let special_tokens_pattern = sorted_special_tokens
+                .iter()
+                .map(|tok| regex::escape(tok))
+                .collect::<Vec<_>>()
+                .join("|");
 
             Some(Regex::new(&format!("({special_tokens_pattern})"))?)
         };
