@@ -1,4 +1,4 @@
-use anyhow::{self, Context};
+use anyhow::Context;
 use clap::Parser;
 use serde::Deserialize;
 use std::{
@@ -21,6 +21,7 @@ struct LaunchConfig {
     model: ModelConfig,
     router: RouterConfig,
     worker: WorkerConfig,
+    tokenizer: TokenizerConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -35,11 +36,16 @@ struct ModelConfig {
     n_layers: u32,
     mlp_hidden_size: u32,
     ckpt_path: PathBuf,
+    repo_id: String,
+    dtype: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TokenizerConfig {
     vocab_path: PathBuf,
     merges_path: PathBuf,
     special_tokens: PathBuf,
     repo_id: String,
-    dtype: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,9 +100,6 @@ fn main() -> anyhow::Result<()> {
 
 fn spawn_worker(worker: &WorkerConfig, model: &ModelConfig) -> anyhow::Result<ChildGuard> {
     let ckpt_path = path_to_string(&model.ckpt_path)?;
-    let vocab_path = path_to_string(&model.vocab_path)?;
-    let merges_path = path_to_string(&model.merges_path)?;
-    let special_tokens = path_to_string(&model.special_tokens)?;
 
     let mut command = Command::new(&worker.command);
     command.args(&worker.args);
@@ -113,9 +116,6 @@ fn spawn_worker(worker: &WorkerConfig, model: &ModelConfig) -> anyhow::Result<Ch
         .arg("--n-layers").arg(model.n_layers.to_string())
         .arg("--mlp-hidden-size").arg(model.mlp_hidden_size.to_string())
         .arg("--ckpt-path").arg(ckpt_path)
-        .arg("--vocab-path").arg(vocab_path)
-        .arg("--merges-path").arg(merges_path)
-        .arg("--special-tokens").arg(special_tokens)
         .arg("--repo-id").arg(&model.repo_id)
         .arg("--dtype").arg(&model.dtype)
         .spawn()
@@ -149,11 +149,24 @@ fn wait_for_worker_ready(worker: &mut ChildGuard, uds_path: &str) -> anyhow::Res
     }
 }
 
-fn spawn_router(binary: &str, uds_path: &str, host: &str, port: &u16) -> std::io::Result<ChildGuard> {
+fn spawn_router(
+    binary: &str,
+    uds_path: &str,
+    host: &str,
+    port: &u16,
+    repo_id: &str,
+    vocab_path: &str,
+    merges_path: &str,
+    special_tokens: &str,
+) -> std::io::Result<ChildGuard> {
     let child = Command::new(binary)
         .arg("--host").arg(host)
         .arg("--port").arg(port.to_string())
         .arg("--uds-path").arg(uds_path)
+        .arg("--tokenizer-repo-id").arg(repo_id)
+        .arg("--vocab-path").arg(vocab_path)
+        .arg("--merges-filepath").arg(merges_path)
+        .arg("--specialtokens-filepath").arg(special_tokens)
         .spawn()?;
 
     Ok(ChildGuard::new(child))
@@ -187,6 +200,10 @@ fn run(config: LaunchConfig) -> anyhow::Result<()> {
     let uds_path = &config.worker.sock;
     let host = &config.router.host;
     let port = &config.router.port;
+    let tokenizer_repo = &config.tokenizer.repo_id;
+    let vocab_path = path_to_string(&config.tokenizer.vocab_path)?;
+    let merges_path = path_to_string(&config.tokenizer.merges_path)?;
+    let special_tokens = path_to_string(&config.tokenizer.special_tokens)?;
 
     let uds = Path::new(uds_path);
     if uds.exists() {
@@ -200,7 +217,16 @@ fn run(config: LaunchConfig) -> anyhow::Result<()> {
     wait_for_worker_ready(&mut worker, uds_path)?;
 
     println!("starting router…");
-    let router = spawn_router(router_binary, uds_path, host, port)?;
+    let router = spawn_router(
+        router_binary,
+        uds_path,
+        host,
+        port,
+        tokenizer_repo,
+        &vocab_path,
+        &merges_path,
+        &special_tokens,
+    )?;
 
     println!(
         "router listening on {}:{}, worker at sock {}",

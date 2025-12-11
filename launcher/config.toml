@@ -9,11 +9,14 @@ vocab_size = 126464
 n_layers = 32
 mlp_hidden_size = 12288
 ckpt_path = "model.safetensors"
+repo_id = "trixyL/LLaDA-8B-Instruct-merged"
+dtype = "float16"
+
+[tokenizer]
 vocab_path = "vocab.json"
 merges_path = "merges.txt"
 special_tokens = "special_tokens.json"
 repo_id = "trixyL/LLaDA-8B-Instruct-merged"
-dtype = "float16"
 
 [router]
 host = "localhost"

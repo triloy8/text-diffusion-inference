@@ -17,6 +17,7 @@ tower = "0.5"
 hyper-util = { version = "0.1", features = ["tokio"] }
 regex = "1.12.2"
 thiserror = "2.0.17"
+hf-hub = "0.4.3"
 
 [build-dependencies]
 tonic-prost-build = "0.14.2"

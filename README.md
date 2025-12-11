@@ -10,7 +10,7 @@
 ```
 [launcher] --spawns--> [router] --grpc--> [worker (LLaDA)]
          \ \_spawns--> [worker (LLaDA)]
-          \__ watches config + lifecycle
+          \__watches config + lifecycle
 ```
 - Launcher owns orchestration.
 - Router keeps lightweight gRPC control/data channels with the worker and exposes the request entrypoint.
@@ -62,6 +62,6 @@ Adjust the payload or target URL as needed.
 - Router/launcher logs stream to stdout; start each via `just` in its own terminal for quick triage.
 
 ## Roadmap
-- [ ] Token abstraction inside the router <-> worker protobuf contract to simplify payload exchange.
+- [X] Token abstraction inside the router <-> worker protobuf contract to simplify payload exchange.
 - [ ] gRPC healthchecks/info/discovery so the launcher and router can reason about worker state.
 - [ ] Sharding experiments.

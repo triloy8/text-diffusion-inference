@@ -1,3 +1,4 @@
+use anyhow::Context;
 use axum::{
     extract::State,
     http::{StatusCode, Uri},
@@ -5,6 +6,7 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
+use hf_hub::{api::sync::Api, Repo, RepoType};
 use std::path::{Path, PathBuf};
 use tokio::net::UnixStream;
 use hyper_util::rt::TokioIo;
@@ -53,6 +55,8 @@ struct Cli {
     port: u16,
     #[arg(long = "uds-path", value_name = "SOCKET")]
     uds_path: PathBuf,
+    #[arg(long = "tokenizer-repo-id", value_name = "REPO")]
+    tokenizer_repo_id: String,
     #[arg(long = "vocab-path", value_name = "vocab_path")]
     vocab_path: PathBuf,
     #[arg(long = "merges-filepath", value_name = "merges_filepath")]
@@ -69,7 +73,15 @@ async fn main() -> anyhow::Result<()> {
 
     let client = TextGenerationServiceClient::new(channel);
 
-    let tokenizer = Tokenizer::from_files(&cli.vocab_path, &cli.merges_filepath, &cli.specialtokens_filepath).unwrap();
+    let (vocab_path, merges_path, specialtokens_path) = download_tokenizer_files(
+        &cli.tokenizer_repo_id,
+        &cli.vocab_path,
+        &cli.merges_filepath,
+        &cli.specialtokens_filepath,
+    )?;
+
+    let tokenizer = Tokenizer::from_files(&vocab_path, &merges_path, &specialtokens_path)
+        .map_err(anyhow::Error::new)?;
 
     let state = AppState { 
         client,
@@ -216,4 +228,30 @@ fn clean_assistant_response(raw: &str) -> String {
         .unwrap_or(after_prefix.len());
 
     after_prefix[..cut_at].trim().to_string()
+}
+
+fn download_tokenizer_files(
+    repo_id: &str,
+    vocab: &Path,
+    merges: &Path,
+    special_tokens: &Path,
+) -> anyhow::Result<(PathBuf, PathBuf, PathBuf)> {
+    let api = Api::new().context("failed to initialize Hugging Face Hub API")?;
+    let repo = api.repo(Repo::new(repo_id.to_owned(), RepoType::Model));
+
+    let vocab_name = vocab.to_string_lossy().into_owned();
+    let merges_name = merges.to_string_lossy().into_owned();
+    let special_tokens_name = special_tokens.to_string_lossy().into_owned();
+
+    let vocab_path = repo
+        .get(&vocab_name)
+        .with_context(|| format!("failed to download {vocab_name} from {repo_id}"))?;
+    let merges_path = repo
+        .get(&merges_name)
+        .with_context(|| format!("failed to download {merges_name} from {repo_id}"))?;
+    let special_tokens_path = repo
+        .get(&special_tokens_name)
+        .with_context(|| format!("failed to download {special_tokens_name} from {repo_id}"))?;
+
+    Ok((vocab_path, merges_path, special_tokens_path))
 }
