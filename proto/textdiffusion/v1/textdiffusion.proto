@@ -12,10 +12,16 @@ service TextGenerationService {
   rpc Generate(GenerateRequest) returns (GenerateResponse);
 }
 
+// Tokens abstraction
+message Tokens {
+  // Token IDs
+  repeated uint32 ids = 1;
+}
+
 // Request for a single generation run.
 message GenerateRequest {
-  // Input prompt to condition the diffusion process.
-  string prompt = 1;
+  // Input tokenized prompt to condition the diffusion process.
+  Tokens prompt_tokens = 1;
 
   // Maximum number of output tokens (or characters, depending on server design).
   // If reached, finish_reason = FINISH_REASON_LENGTH.
@@ -43,8 +49,8 @@ message GenerateRequest {
 
 // Response for a single generation run.
 message GenerateResponse {
-  // The final generated text.
-  string output_text = 1;
+  // The final generated tokens.
+  Tokens output_tokens = 1;
 
   // Why generation stopped.
   FinishReason finish_reason = 2;

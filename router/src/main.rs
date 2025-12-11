@@ -16,6 +16,8 @@ use crate::models::{
     ChatCompletionResponse, 
     Message, Choice
 };
+mod tokenizer;
+use crate::tokenizer::Tokenizer;
 
 pub mod textdiffusion {
     pub mod v1 {
@@ -26,11 +28,13 @@ pub mod textdiffusion {
 use textdiffusion::v1::{
     text_generation_service_client::TextGenerationServiceClient,
     GenerateRequest,
+    Tokens,
 };
 
 #[derive(Clone)]
 struct AppState {
     client: TextGenerationServiceClient<Channel>,
+    tokenizer: Tokenizer,
 }
 
 const DEFAULT_MAX_TOKENS: u32 = 128;
@@ -49,17 +53,28 @@ struct Cli {
     port: u16,
     #[arg(long = "uds-path", value_name = "SOCKET")]
     uds_path: PathBuf,
+    #[arg(long = "vocab-path", value_name = "vocab_path")]
+    vocab_path: PathBuf,
+    #[arg(long = "merges-filepath", value_name = "merges_filepath")]
+    merges_filepath: PathBuf,
+    #[arg(long = "specialtokens-filepath", value_name = "specialtokens_filepath")]
+    specialtokens_filepath: PathBuf,
 }
 
 #[tokio::main]
-async fn main()  -> anyhow::Result<()> {
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let channel = connect_worker(&cli.uds_path).await?;
 
     let client = TextGenerationServiceClient::new(channel);
 
-    let state = AppState { client };
+    let tokenizer = Tokenizer::from_files(&cli.vocab_path, &cli.merges_filepath, &cli.specialtokens_filepath).unwrap();
+
+    let state = AppState { 
+        client,
+        tokenizer,
+    };
 
     let app = Router::new()
         .route("/v1/chat/completions", post(handle_chat_completions))
@@ -116,14 +131,17 @@ async fn handle_chat_completions(
     let mask_id = mask_id.unwrap_or(DEFAULT_MASK_ID);
     let temperature = temperature.unwrap_or(DEFAULT_TEMPERATURE);
 
+    let proto_ids = state.tokenizer.encode(formatted_chat).unwrap().into_iter().map(|id| id as u32).collect();
+    let prompt_tokens = Tokens{ ids: proto_ids};
+
     let request = GenerateRequest {
-        prompt: formatted_chat,
-        max_output_tokens,
+        prompt_tokens: Some(prompt_tokens),
+        max_output_tokens: max_output_tokens,
         num_steps: steps,
-        seed,
-        mask_id,
+        seed: seed,
+        mask_id: mask_id,
         block_length: block_len,
-        temperature,
+        temperature: temperature,
         request_id: conversation_id,
     };
 
@@ -132,7 +150,10 @@ async fn handle_chat_completions(
         .map_err(|_| StatusCode::BAD_GATEWAY)?
         .into_inner();
 
-    let cleaned_output = clean_assistant_response(&response.output_text);
+    let proto_ids = response.output_tokens.unwrap().ids.into_iter().map(|id| id as usize).collect();
+    let output_text = state.tokenizer.decode(proto_ids).unwrap();
+
+    let cleaned_output = clean_assistant_response(&output_text);
 
     let return_message = Message {
         role: "assistant".to_string(),

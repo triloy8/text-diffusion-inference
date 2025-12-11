@@ -27,6 +27,7 @@ pub enum TokenizerError {
     Utf8(#[from] FromUtf8Error),
 }
 
+#[derive(Clone)]
 pub struct Tokenizer{
     re_spec: Option<Regex>,
     re_pat: Regex,
