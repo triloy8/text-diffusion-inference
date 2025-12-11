@@ -132,7 +132,7 @@ async fn handle_chat_completions(
     let temperature = temperature.unwrap_or(DEFAULT_TEMPERATURE);
 
     let proto_ids = state.tokenizer.encode(formatted_chat).unwrap().into_iter().map(|id| id as u32).collect();
-    let prompt_tokens = Tokens{ ids: proto_ids};
+    let prompt_tokens = Tokens{ ids: proto_ids };
 
     let request = GenerateRequest {
         prompt_tokens: Some(prompt_tokens),

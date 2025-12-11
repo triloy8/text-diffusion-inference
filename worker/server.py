@@ -43,23 +43,24 @@ class WorkerConfig:
 
 
 class TextGenerationService(textdiffusion_pb2_grpc.TextGenerationServiceServicer):
-    def __init__(self, model, tokenizer, device):
+    def __init__(self, model):
         self.model = model
-        self.tokenizer = tokenizer
-        self.device = device
 
     def Generate(self, request, context):
-        output_text = generate_llada(model=self.model,
-                                     tokenizer=self.tokenizer,
-                                     prompt=request.prompt,
-                                     mask_id=request.mask_id,
-                                     steps=request.num_steps,
-                                     gen_length=request.max_output_tokens,
-                                     block_length=request.block_length,
-                                     temperature=request.temperature)
+        output_ids = generate_llada(
+            model=self.model,
+            prompt_ids=request.prompt_tokens.ids,
+            mask_id=request.mask_id,
+            steps=request.num_steps,
+            gen_length=request.max_output_tokens,
+            block_length=request.block_length,
+            temperature=request.temperature
+        )
+
+        output_tokens = textdiffusion_pb2.Tokens(ids=output_ids)
 
         return textdiffusion_pb2.GenerateResponse(
-            output_text=output_text,
+            output_tokens=output_tokens,
             finish_reason=textdiffusion_pb2.FinishReason.FINISH_REASON_LENGTH,
             request_id=request.request_id,
         )
@@ -90,29 +91,9 @@ def serve(config: WorkerConfig) -> None:
     model.load_state_dict(clean_state_dict)
     model = model.to(dtype=torch_dtype)
 
-    special_tokens_filepath = hf_hub_download(
-        repo_id=model_cfg.repo_id,
-        repo_type="model",
-        filename=str(model_cfg.special_tokens)
-    )
-    vocab_filepath = hf_hub_download(
-        repo_id=model_cfg.repo_id,
-        repo_type="model",
-        filename=str(model_cfg.vocab_path)
-    )
-    merges_filepath = hf_hub_download(
-        repo_id=model_cfg.repo_id,
-        repo_type="model",
-        filename=str(model_cfg.merges_path)
-    )
-    tokenizer = Tokenizer.from_files(
-        vocab_filepath=vocab_filepath,
-        merges_filepath=merges_filepath, 
-        special_tokens=special_tokens_filepath
-    )
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
     textdiffusion_pb2_grpc.add_TextGenerationServiceServicer_to_server(
-        TextGenerationService(model, tokenizer, model_cfg.device), server
+        TextGenerationService(model), server
     )
     server.add_insecure_port(f"unix://{config.uds_path}")
     server.start()
@@ -136,9 +117,6 @@ def parse_args() -> WorkerConfig:
     parser.add_argument("--n-layers", type=int, required=True)
     parser.add_argument("--mlp-hidden-size", type=int, required=True)
     parser.add_argument("--ckpt-path", type=Path, required=True)
-    parser.add_argument("--vocab-path", type=Path, required=True)
-    parser.add_argument("--merges-path", type=Path, required=True)
-    parser.add_argument("--special-tokens", type=Path, required=True)
     parser.add_argument("--repo-id", required=True)
     parser.add_argument("--dtype", required=True)
 

@@ -39,16 +39,14 @@ def get_num_transfer_tokens(mask_index, steps):
 
 def generate_llada(
     model=None,
-    tokenizer=None,
-    prompt="Oh wow, it's Judy!",
+    prompt_ids=None,
     mask_id=126336,
     steps=128,
     gen_length=128,
     block_length=32,
     temperature=0.0,
 ):
-    input_ids = tokenizer.encode(prompt)
-    input_ids = torch.tensor(input_ids).unsqueeze(0).to(torch.device(model.device))
+    input_ids = torch.tensor(prompt_ids).unsqueeze(0).to(torch.device(model.device))
 
     x = torch.full((1, input_ids.shape[1] + gen_length), mask_id, dtype=torch.long).to(model.device)
     x[:, :input_ids.shape[1]] = input_ids.clone()
@@ -89,6 +87,6 @@ def generate_llada(
                 transfer_index[j, select_index] = True
             x[transfer_index] = x0[transfer_index]
 
-    output_string = tokenizer.decode(x[0].tolist())
+    output_ids = x[0].tolist()
 
-    return output_string
+    return output_ids
