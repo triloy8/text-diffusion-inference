@@ -11,7 +11,6 @@ import torch
 
 from generate import generate_llada
 from model import LLaDAModel
-from tokenizer import Tokenizer
 
 from textdiffusion.v1 import textdiffusion_pb2
 from textdiffusion.v1 import textdiffusion_pb2_grpc
@@ -29,9 +28,6 @@ class ModelConfig:
     n_layers: int
     mlp_hidden_size: int
     ckpt_path: Path
-    vocab_path: Path
-    merges_path: Path
-    special_tokens: Path
     repo_id: str
     dtype: str
 
@@ -132,9 +128,6 @@ def parse_args() -> WorkerConfig:
         n_layers=args.n_layers,
         mlp_hidden_size=args.mlp_hidden_size,
         ckpt_path=args.ckpt_path,
-        vocab_path=args.vocab_path,
-        merges_path=args.merges_path,
-        special_tokens=args.special_tokens,
         repo_id=args.repo_id,
         dtype=args.dtype,
     )
