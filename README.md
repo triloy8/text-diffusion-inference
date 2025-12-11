@@ -3,7 +3,7 @@
 ## What is this?
 - Minimal text diffusion inference server loosely inspired by Hugging Face's TGI design.
 - Launcher bootstraps a router and worker pair so the worker can host the LLaDA diffusion text model.
-- LLaDA diffusion text model is the only supported model right now. (and probably the only one for a while)
+- LLaDA diffusion text model is the only supported model right now (and probably the only one for a while).
 - Only the happy path is wired up today, future work will still remain barebones.
 
 ## Architecture at a glance
@@ -20,7 +20,7 @@
 Install the following tooling before launching any components:
 - `just` for project automation.
 - `uv` for managing the worker's Python environment.
-- `protoc` to generate protobuf stubs for router ↔ worker traffic.
+- `protoc` to generate protobuf stubs for router <-> worker traffic.
 - `rust` and `cargo` to build the launcher/router binaries.
 
 ## Running the project
