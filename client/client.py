@@ -1,7 +1,7 @@
 import uuid
 import requests
 
-ROUTER_URL = "http://localhost:3001/v1/chat/completions"
+ROUTER_URL = "http://localhost:3935/v1/chat/completions"
 
 def main():
     payload = {

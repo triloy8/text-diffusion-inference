@@ -20,7 +20,7 @@ repo_id = "trixyL/LLaDA-8B-Instruct-merged"
 
 [router]
 host = "127.0.0.1"
-port = 3001
+port = 3935
 binary = "../router/target/debug/router"
 
 [worker]
