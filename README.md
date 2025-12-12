@@ -22,6 +22,8 @@ Install the following tooling before launching any components:
 - `uv` for managing the worker's Python environment.
 - `protoc` to generate protobuf stubs for router <-> worker traffic.
 - `rust` and `cargo` to build the launcher/router binaries.
+- Ensure your system has IPv6 loopback enabled (or configure the router host to an IPv4 address) so the router bind step succeeds.
+- Linux hosts need the OpenSSL development headers installed (`libssl-dev` on Debian/Ubuntu) so `openssl-sys` can build cleanly.
 
 ## Running the project
 1. Run `just setup` to install worker dependencies, build the Rust crates, and generate protobufs (debug profile only for now, no release build yet).

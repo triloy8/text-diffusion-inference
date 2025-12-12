@@ -19,7 +19,7 @@ special_tokens = "special_tokens.json"
 repo_id = "trixyL/LLaDA-8B-Instruct-merged"
 
 [router]
-host = "localhost"
+host = "127.0.0.1"
 port = 3001
 binary = "../router/target/debug/router"
 
