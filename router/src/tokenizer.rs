@@ -54,16 +54,11 @@ impl Tokenizer {
         let mut gpt2_vocab: HashMap<String, usize> = serde_json::from_str::<HashMap<String, usize>>(&raw_gpt2_vocab)?;
 
         let raw_special_tokens = std::fs::read_to_string(special_tokens_filepath)?;
-        let special_tokens_map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&raw_special_tokens)?;
-        let special_tokens: Vec<String> = special_tokens_map
-            .into_iter()
-            .map(|(special_token, _)| special_token)
-            .collect();
-        for special_token in &special_tokens {
-            if !gpt2_vocab.contains_key(special_token) {
-                let next_id = gpt2_vocab.len();
-                gpt2_vocab.insert(special_token.clone(), next_id);
-            }
+        let special_tokens_map: HashMap<String, usize> = serde_json::from_str(&raw_special_tokens)?;
+        let mut special_tokens: Vec<String> = Vec::with_capacity(special_tokens_map.len());
+        for (special_token, token_id) in special_tokens_map {
+            special_tokens.push(special_token.clone());
+            gpt2_vocab.insert(special_token, token_id);
         }
 
         let mut vocab_encoder: HashMap<String, usize> = HashMap::new();
