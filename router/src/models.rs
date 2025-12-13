@@ -25,8 +25,6 @@ pub struct ChatCompletionRequest {
     #[serde(default)]
     pub seed: Option<u64>,
     #[serde(default)]
-    pub mask_id: Option<u32>,
-    #[serde(default)]
     pub block_length: Option<u32>,
     #[serde(default)]
     pub temperature: Option<f32>,

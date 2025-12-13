@@ -37,6 +37,7 @@ use textdiffusion::v1::{
 struct AppState {
     client: TextGenerationServiceClient<Channel>,
     tokenizer: Tokenizer,
+    mask_id: u32,
 }
 
 const DEFAULT_MAX_TOKENS: u32 = 128;
@@ -63,6 +64,8 @@ struct Cli {
     merges_filepath: PathBuf,
     #[arg(long = "specialtokens-filepath", value_name = "specialtokens_filepath")]
     specialtokens_filepath: PathBuf,
+    #[arg(long = "mask-id", value_name = "MASK_ID", default_value_t = DEFAULT_MASK_ID)]
+    mask_id: u32,
 }
 
 #[tokio::main]
@@ -86,6 +89,7 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState { 
         client,
         tokenizer,
+        mask_id: cli.mask_id,
     };
 
     let app = Router::new()
@@ -127,7 +131,6 @@ async fn handle_chat_completions(
         max_tokens,
         num_steps,
         seed,
-        mask_id,
         block_length,
         temperature,
     } = payload;
@@ -140,7 +143,7 @@ async fn handle_chat_completions(
     let steps = num_steps.unwrap_or(DEFAULT_NUM_STEPS) as i32;
     let block_len = block_length.unwrap_or(DEFAULT_BLOCK_LENGTH) as i32;
     let seed = seed.unwrap_or(DEFAULT_SEED);
-    let mask_id = mask_id.unwrap_or(DEFAULT_MASK_ID);
+    let mask_id = state.mask_id;
     let temperature = temperature.unwrap_or(DEFAULT_TEMPERATURE);
 
     let proto_ids = state.tokenizer.encode(formatted_chat).unwrap().into_iter().map(|id| id as u32).collect();

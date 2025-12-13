@@ -16,7 +16,6 @@ def main():
         "max_tokens": 128,
         "num_steps": 128,
         "seed": 0,
-        "mask_id": 126336,
         "block_length": 32,
         "temperature": 0.0,
     }

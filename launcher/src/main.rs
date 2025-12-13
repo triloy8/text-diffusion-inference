@@ -46,6 +46,7 @@ struct TokenizerConfig {
     merges_path: PathBuf,
     special_tokens: PathBuf,
     repo_id: String,
+    mask_id: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,6 +159,7 @@ fn spawn_router(
     vocab_path: &str,
     merges_path: &str,
     special_tokens: &str,
+    mask_id: u32,
 ) -> std::io::Result<ChildGuard> {
     let child = Command::new(binary)
         .arg("--host").arg(host)
@@ -167,6 +169,7 @@ fn spawn_router(
         .arg("--vocab-path").arg(vocab_path)
         .arg("--merges-filepath").arg(merges_path)
         .arg("--specialtokens-filepath").arg(special_tokens)
+        .arg("--mask-id").arg(mask_id.to_string())
         .spawn()?;
 
     Ok(ChildGuard::new(child))
@@ -204,6 +207,7 @@ fn run(config: LaunchConfig) -> anyhow::Result<()> {
     let vocab_path = path_to_string(&config.tokenizer.vocab_path)?;
     let merges_path = path_to_string(&config.tokenizer.merges_path)?;
     let special_tokens = path_to_string(&config.tokenizer.special_tokens)?;
+    let mask_id = config.tokenizer.mask_id;
 
     let uds = Path::new(uds_path);
     if uds.exists() {
@@ -226,6 +230,7 @@ fn run(config: LaunchConfig) -> anyhow::Result<()> {
         &vocab_path,
         &merges_path,
         &special_tokens,
+        mask_id,
     )?;
 
     println!(
