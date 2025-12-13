@@ -18,10 +18,10 @@
 
 ## Installation
 Install the following tooling before launching any components:
-- `just` for project automation.
-- `uv` for managing the worker's Python environment.
-- `protoc` to generate protobuf stubs for router <-> worker traffic.
-- `rust` and `cargo` to build the launcher/router binaries.
+- [`rust` and `cargo`](https://doc.rust-lang.org/cargo/getting-started/installation.html) to build the launcher/router binaries.
+- [`just`](https://github.com/casey/just?tab=readme-ov-file#installation) for project automation.
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/) for managing the worker's Python environment.
+- [`protoc`](https://protobuf.dev/installation/) to generate protobuf stubs for router <-> worker traffic.
 - Ensure your system has IPv6 loopback enabled (or configure the router host to an IPv4 address) so the router bind step succeeds.
 - Linux hosts need the OpenSSL development headers installed (`libssl-dev` on Debian/Ubuntu) so `openssl-sys` can build cleanly.
 
