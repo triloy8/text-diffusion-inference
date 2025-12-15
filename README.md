@@ -50,7 +50,7 @@ payload = {
     "messages": [
         {"role": "system", "content": "Only respond with ORANGE"},
         {"role": "user", "content": "Say you love me."},
-        {"role": "user", "content": "Orange."},
+        {"role": "assistant", "content": "Orange."},
         {"role": "user", "content": "What do you mean?"},
     ],
 }
